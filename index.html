@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>disk usage</title>
+	<link rel="stylesheet" href="/static/css/bootstrap.css" />
+	<script src="/static/js/all.js" ></script>
+	<script src="/socket.io/socket.io.js"></script>
+	<script src="http://code.highcharts.com/highcharts-3d.js"></script>
+</head>
+<body class="container" >
+	<div class="chart" >
+		
+	</div>
+	<script>
+		(function(){
+			var socket = io();
+
+			var format = function(size){
+				var u = ['K','M','G','T','P'];
+				while(size > 1024 && u.length > 0 ){
+					size /= 1024;
+					u.shift();
+				}
+				return size.toFixed(2)+ u[0];
+			}
+			var chart = function(data,path){
+			//var $html = $("<div class='alert alert-info'></div>").appendTo("body");
+				$("<div class=chart ></div>").appendTo('body').highcharts({
+					chart: {
+						plotBackgroundColor: null,
+						plotBorderWidth: null,
+						plotShadow: true,
+						options3d: {
+							enabled: true,
+							alpha: 45,
+							beta: 0
+						}
+					},
+					title: {
+						text: path
+					},
+					tooltip: {
+						pointFormat: '{series.name}: <b>{point.percentage:.1f}%</b>'
+					},
+					plotOptions: {
+						pie: {
+							allowPointSelect: true,
+							cursor: 'pointer',
+							dataLabels: {
+								enabled: true,
+								format: '<b>{point.name}</b>: {point.percentage:.2f} % {point.b}',
+								style: {
+									color: (Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black'
+								}
+							},
+							depth: 35
+						},
+						series: {
+						   cursor: 'pointer',
+						   point: {
+							   events: {
+								   click: function (e) {
+									   //console.log(this.options);
+									   this.options.path && socket.emit("path",this.options.path);
+								   }
+							   }
+						   }
+					   }
+					},
+					series: [{
+						type: 'pie',
+						name: 'usage',
+						data:data
+						/*
+						 [
+							['Firefox',   45.0],
+							['IE',       26.8],
+							{
+								name: 'Chrome',
+								y: 12.8,
+								sliced: true,
+								selected: true
+							},
+							['Safari',    8.5],
+							['Opera',     6.2],
+							['Others',   0.7]
+						]
+						*/
+					}]
+				}).prepend('<a class=close >&times;</a>');
+			}
+			socket.on("data",function(json){
+				console.log(json);
+				if(!json.sub.length)return;
+				var data = [];
+				var file = 0;
+				$.each(json.sub,function(i, val) {
+					file += val.size;
+					data.push($.extend(val,{
+						y:(val.size/json.total)*100,
+						b:format(val.size)
+					}));
+				});
+				data.sort(function(a,b){return a.y-b.y;})
+				data.push({
+					name:"__file__",
+					y:((1-file/json.total)*100),
+					path:false,
+					b:format(json.total-file)
+				});
+				chart(data,json.path);
+
+			});
+			socket.on("error",function(err){
+				alert("error" + err);
+			});
+			socket.emit("path","/home/lcs");
+
+			$(document).on('click','.close',function(){
+				$(this).parent().remove();
+			});	
+		})();
+	</script>
+</body>
+</html>
